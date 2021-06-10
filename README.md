@@ -1,2 +1,3 @@
-# mintcraft
+# Mintcraft
+
 ink! project for mintcraft
