@@ -15,6 +15,16 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![allow(dead_code)]
 
+// Export to pub
+pub use self::erc721::{
+    Error,
+    IErc721,
+    IErc721Metadata,
+    Result,
+    TokenId,
+};
+// FIXME Cursor errors when export Event
+
 use ink_lang as ink;
 
 #[ink::contract]

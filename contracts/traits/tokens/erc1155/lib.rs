@@ -16,16 +16,48 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
+// Export to pub
+pub use self::erc1155::{
+    Error,
+    IErc1155,
+    IErc1155TokenReceiver,
+    Result,
+    TokenId,
+};
+// FIXME Cursor errors when export Event
+
 use ink_lang as ink;
 
 #[ink::contract]
 mod erc1155 {
     use ink_lang as ink;
-    use ink_prelude::vec::Vec;
-    use ink_prelude::string::String;
+    use ink_prelude::{
+        string::String,
+        vec::Vec,
+    };
+    use scale::{
+        Decode,
+        Encode,
+    };
+
+    /// The result type.
+    pub type Result<T> = core::result::Result<T, Error>;
 
     /// A token ID.
     pub type TokenId = u128;
+
+    #[derive(Encode, Decode, Debug, PartialEq, Eq, Copy, Clone)]
+    #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
+    pub enum Error {
+        NotOwner,
+        NotApproved,
+        TokenExists,
+        TokenNotFound,
+        CannotInsert,
+        CannotRemove,
+        CannotFetchValue,
+        NotAllowed,
+    }
 
     /// Indicate that a token transfer has occured.
     ///
@@ -94,7 +126,6 @@ mod erc1155 {
         #[ink(topic)]
         id: TokenId,
     }
-
 
     /// The interface for an ERC-1155 compliant contract.
     ///
@@ -192,7 +223,7 @@ mod erc1155 {
     /// compliant contract which attempt to transfer tokens directly to the contract's address must be
     /// reverted.
     #[ink::trait_definition]
-    pub trait Erc1155TokenReceiver {
+    pub trait IErc1155TokenReceiver {
         /// Handle the receipt of a single ERC-1155 token.
         ///
         /// This should be called by a compliant ERC-1155 contract if the intended recipient is a smart
