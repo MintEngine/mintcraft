@@ -17,7 +17,7 @@ scale-info = { version = "0.6.0", default-features = false, features = ["derive"
 
 [lib]
 name = "trait_erc721"
-path = "src/lib.rs"
+path = "lib.rs"
 crate-type = [
 	# Used for normal contract Wasm blobs.
 	"cdylib",
@@ -28,10 +28,12 @@ crate-type = [
 [features]
 default = ["std"]
 std = [
+    "ink_primitives/std",
     "ink_metadata/std",
     "ink_env/std",
     "ink_storage/std",
-    "ink_primitives/std",
+    "ink_lang/std",
+    "ink_prelude/std",
     "scale/std",
     "scale-info/std",
 ]

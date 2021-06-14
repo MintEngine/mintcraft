@@ -13,21 +13,24 @@
 // limitations under the License.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![allow(dead_code)]
 
 use ink_lang as ink;
 
 #[ink::contract]
 mod erc721 {
     use ink_lang as ink;
+    use ink_prelude::string::String;
     use scale::{
         Decode,
         Encode,
     };
+
     /// The result type.
     pub type Result<T> = core::result::Result<T, Error>;
 
     /// A token ID.
-    pub type TokenId = u32;
+    pub type TokenId = u128;
 
     #[derive(Encode, Decode, Debug, PartialEq, Eq, Copy, Clone)]
     #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
@@ -128,6 +131,26 @@ mod erc721 {
         /// Deletes an existing token. Only the owner can burn the token.
         #[ink(message)]
         fn burn(&mut self, id: TokenId) -> Result<()>;
+    }
+
+    /// Trait implmented by all ERC-721 with metadata
+    #[ink::trait_definition]
+    pub trait IErc721Metadata {
+        /// @notice A descriptive name for a collection of NFTs in this contract
+        #[ink(message)]
+        fn name(&self) -> Option<String>;
+
+        /// @notice An abbreviated name for NFTs in this contract
+        #[ink(message)]
+        fn symbol(&self) -> Option<String>;
+
+        /// A distinct Uniform Resource Identifier (URI) for a given asset.
+        ///
+        /// @dev Throws if `_tokenId` is not a valid NFT. URIs are defined in RFC
+        /// 3986. The URI may point to a JSON file that conforms to the "ERC721
+        /// Metadata JSON Schema".
+        #[ink(message)]
+        fn token_uri(&self, id: TokenId) -> Option<String>;
     }
 
     // TODO tmp hack struct for passing compile
