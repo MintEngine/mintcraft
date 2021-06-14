@@ -19,11 +19,10 @@
 // Export to pub
 pub use self::erc1155::{
     consts,
-    Error,
+    types,
+    IERC1155Metadata,
     IErc1155,
     IErc1155TokenReceiver,
-    Result,
-    TokenId,
 };
 // FIXME Cursor errors when export Event
 
@@ -36,28 +35,31 @@ mod erc1155 {
         string::String,
         vec::Vec,
     };
-    use scale::{
-        Decode,
-        Encode,
-    };
 
-    /// The result type.
-    pub type Result<T> = core::result::Result<T, Error>;
+    /// export all types
+    pub mod types {
+        use scale::{
+            Decode,
+            Encode,
+        };
 
-    /// A token ID.
-    pub type TokenId = u128;
+        /// The result type.
+        pub type Result<T> = core::result::Result<T, Error>;
+        /// A token ID.
+        pub type TokenId = u128;
 
-    #[derive(Encode, Decode, Debug, PartialEq, Eq, Copy, Clone)]
-    #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
-    pub enum Error {
-        NotOwner,
-        NotApproved,
-        TokenExists,
-        TokenNotFound,
-        CannotInsert,
-        CannotRemove,
-        CannotFetchValue,
-        NotAllowed,
+        #[derive(Encode, Decode, Debug, PartialEq, Eq, Copy, Clone)]
+        #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
+        pub enum Error {
+            NotOwner,
+            NotApproved,
+            TokenExists,
+            TokenNotFound,
+            CannotInsert,
+            CannotRemove,
+            CannotFetchValue,
+            NotAllowed,
+        }
     }
 
     /// Indicate that a token transfer has occured.
@@ -149,10 +151,10 @@ mod erc1155 {
             &mut self,
             from: AccountId,
             to: AccountId,
-            token_id: TokenId,
+            token_id: types::TokenId,
             value: Balance,
             data: Vec<u8>,
-        );
+        ) -> types::Result<()>;
 
         /// Perform a batch transfer of `token_ids` to the `to` account from the `from` account.
         ///
@@ -166,14 +168,14 @@ mod erc1155 {
             &mut self,
             from: AccountId,
             to: AccountId,
-            token_ids: Vec<TokenId>,
+            token_ids: Vec<types::TokenId>,
             values: Vec<Balance>,
             data: Vec<u8>,
-        );
+        ) -> types::Result<()>;
 
         /// Query the balance of a specific token for the provided account.
         #[ink(message)]
-        fn balance_of(&self, owner: AccountId, token_id: TokenId) -> Balance;
+        fn balance_of(&self, owner: AccountId, token_id: types::TokenId) -> Balance;
 
         /// Query the balances for a set of tokens for a set of accounts.
         ///
@@ -188,17 +190,31 @@ mod erc1155 {
         fn balance_of_batch(
             &self,
             owners: Vec<AccountId>,
-            token_ids: Vec<TokenId>,
+            token_ids: Vec<types::TokenId>,
         ) -> Vec<Balance>;
 
         /// Enable or disable a third party, known as an `operator`, to control all tokens on behalf of
         /// the caller.
         #[ink(message)]
-        fn set_approval_for_all(&mut self, operator: AccountId, approved: bool);
+        fn set_approval_for_all(
+            &mut self,
+            operator: AccountId,
+            approved: bool,
+        ) -> types::Result<()>;
 
         /// Query if the given `operator` is allowed to control all of `owner`'s tokens.
         #[ink(message)]
         fn is_approved_for_all(&self, owner: AccountId, operator: AccountId) -> bool;
+    }
+
+    /// Note: The ERC-165 identifier for this interface is 0x0e89341c.
+    #[ink::trait_definition]
+    pub trait IERC1155Metadata {
+        /// @notice A distinct Uniform Resource Identifier (URI) for a given token.
+        /// @dev URIs are defined in RFC 3986.
+        /// The URI MUST point to a JSON file that conforms to the "ERC-1155 Metadata URI JSON Schema".
+        #[ink(message)]
+        fn uri(&self, token_id: types::TokenId) -> Option<String>;
     }
 
     pub mod consts {
@@ -249,7 +265,7 @@ mod erc1155 {
             &mut self,
             operator: AccountId,
             from: AccountId,
-            token_id: TokenId,
+            token_id: types::TokenId,
             value: Balance,
             data: Vec<u8>,
         ) -> Vec<u8>;
@@ -276,7 +292,7 @@ mod erc1155 {
             &mut self,
             operator: AccountId,
             from: AccountId,
-            token_ids: Vec<TokenId>,
+            token_ids: Vec<types::TokenId>,
             values: Vec<Balance>,
             data: Vec<u8>,
         );

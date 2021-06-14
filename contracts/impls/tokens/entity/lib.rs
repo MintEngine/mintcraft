@@ -23,9 +23,12 @@ mod erc1155 {
     use ink_prelude::collections::BTreeMap;
     use trait_erc1155::{
         consts::MAGIC_VALUE_RECEIVED,
+        types::{
+            Result,
+            TokenId,
+        },
         IErc1155,
         IErc1155TokenReceiver,
-        TokenId,
     };
 
     /// Indicate that a token transfer has occured.
@@ -268,7 +271,7 @@ mod erc1155 {
             token_id: TokenId,
             value: Balance,
             data: Vec<u8>,
-        ) {
+        ) -> Result<()> {
             // Q: Does the caller change if the function is called from within this smart contract?
             if self.env().caller() != from {
                 assert!(
@@ -285,6 +288,7 @@ mod erc1155 {
             );
 
             self.perform_transfer(from, to, token_id, value, data);
+            Ok(())
         }
 
         #[ink(message)]
@@ -295,7 +299,7 @@ mod erc1155 {
             token_ids: Vec<TokenId>,
             values: Vec<Balance>,
             data: Vec<u8>,
-        ) {
+        ) -> Result<()> {
             if self.env().caller() != from {
                 assert!(
                     self.is_approved_for_all(from, self.env().caller()),
@@ -318,7 +322,9 @@ mod erc1155 {
 
             token_ids.iter().zip(values.iter()).for_each(|(&id, &v)| {
                 self.perform_transfer(from, to, id, v, data.clone());
-            })
+            });
+
+            Ok(())
         }
 
         #[ink(message)]
@@ -343,7 +349,11 @@ mod erc1155 {
         }
 
         #[ink(message)]
-        fn set_approval_for_all(&mut self, operator: AccountId, approved: bool) {
+        fn set_approval_for_all(
+            &mut self,
+            operator: AccountId,
+            approved: bool,
+        ) -> Result<()> {
             assert!(
                 operator != self.env().caller(),
                 "An account does not need to approve themselves to transfer tokens."
@@ -360,6 +370,8 @@ mod erc1155 {
                 operator,
                 approved,
             });
+
+            Ok(())
         }
 
         #[ink(message)]
