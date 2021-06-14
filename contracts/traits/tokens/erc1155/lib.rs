@@ -18,6 +18,7 @@
 
 // Export to pub
 pub use self::erc1155::{
+    consts,
     Error,
     IErc1155,
     IErc1155TokenReceiver,
@@ -200,19 +201,21 @@ mod erc1155 {
         fn is_approved_for_all(&self, owner: AccountId, operator: AccountId) -> bool;
     }
 
-    // This is the "magic" return value that we expect if a smart contract supports receiving ERC-1155
-    // tokens.
-    //
-    // It is calculated with
-    // `bytes4(keccak256("onERC1155Received(address,address,uint256,uint256,bytes)"))`, and corresponds
-    // to 0xf23a6e61.
-    //
-    // Note that this is Ethereum specific, I don't know how it translates in Ink! land.
-    const MAGIC_VALUE_RECEIVED: [u8; 4] = [242, 58, 110, 97];
-    // It is calculated with
-    // `bytes4(keccak256("onERC1155BatchReceived(address,address,uint256[],uint256[],bytes)"))`, and corresponds
-    // to 0xbc197c81
-    const MAGIC_VALUE_BATCH_RECEIVED: [u8; 4] = [188, 25, 124, 129];
+    pub mod consts {
+        // This is the "magic" return value that we expect if a smart contract supports receiving ERC-1155
+        // tokens.
+        //
+        // It is calculated with
+        // `bytes4(keccak256("onERC1155Received(address,address,uint256,uint256,bytes)"))`, and corresponds
+        // to 0xf23a6e61.
+        //
+        // Note that this is Ethereum specific, I don't know how it translates in Ink! land.
+        pub const MAGIC_VALUE_RECEIVED: [u8; 4] = [242, 58, 110, 97];
+        // It is calculated with
+        // `bytes4(keccak256("onERC1155BatchReceived(address,address,uint256[],uint256[],bytes)"))`, and corresponds
+        // to 0xbc197c81
+        pub const MAGIC_VALUE_BATCH_RECEIVED: [u8; 4] = [188, 25, 124, 129];
+    }
 
     /// The interface for an ERC-1155 Token Receiver contract.
     ///

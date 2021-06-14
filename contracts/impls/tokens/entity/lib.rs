@@ -16,171 +16,84 @@
 #![cfg_attr(test, allow(dead_code))]
 #![cfg_attr(test, allow(unused_imports))]
 
-use ink_env::AccountId;
 use ink_lang as ink;
-use ink_prelude::vec::Vec;
-
-// This is the "magic" return value that we expect if a smart contract supports receiving ERC-1155
-// tokens.
-//
-// It is calculated with
-// `bytes4(keccak256("onERC1155Received(address,address,uint256,uint256,bytes)"))`, and corresponds
-// to 0xf23a6e61.
-//
-// Note that this is Ethereum specific, I don't know how it translates in Ink! land.
-const MAGIC_VALUE: [u8; 4] = [242, 58, 110, 97];
-
-type TokenId = u128;
-type Balance = <ink_env::DefaultEnvironment as ink_env::Environment>::Balance;
-
-/// The interface for an ERC-1155 compliant contract.
-///
-/// The interface is defined here: https://eips.ethereum.org/EIPS/eip-1155.
-///
-/// The goal of ERC-1155 is to allow a single deployed contract to manage a variety of assets.
-/// These assets can be fungible, non-fungible, or a combination.
-///
-/// By tracking multiple assets the ERC-1155 standard is able to support batch transfers, which
-/// make it easy to transfer a mix of multiple tokens at once.
-#[ink::trait_definition]
-pub trait Erc1155 {
-    /// Transfer the a `value` amount of `token_id` tokens to the `to` account from the `from`
-    /// account.
-    ///
-    /// Note that the call does not have to originate from the `from` account, and may originate
-    /// from any account which is approved to transfer `from`'s tokens.
-    #[ink(message)]
-    fn safe_transfer_from(
-        &mut self,
-        from: AccountId,
-        to: AccountId,
-        token_id: TokenId,
-        value: Balance,
-        data: Vec<u8>,
-    );
-
-    /// Perform a batch transfer of `token_ids` to the `to` account from the `from` account.
-    ///
-    /// The number of `values` specified to be transfer must match the number of `token_ids`,
-    /// otherwise this call will revert.
-    ///
-    /// Note that the call does not have to originate from the `from` account, and may originate
-    /// from any account which is approved to transfer `from`'s tokens.
-    #[ink(message)]
-    fn safe_batch_transfer_from(
-        &mut self,
-        from: AccountId,
-        to: AccountId,
-        token_ids: Vec<TokenId>,
-        values: Vec<Balance>,
-        data: Vec<u8>,
-    );
-
-    /// Query the balance of a specific token for the provided account.
-    #[ink(message)]
-    fn balance_of(&self, owner: AccountId, token_id: TokenId) -> Balance;
-
-    /// Query the balances for a set of tokens for a set of accounts.
-    ///
-    /// E.g use this call if you want to query what Alice and Bob's balances are for Tokens ID1 and
-    /// ID2.
-    ///
-    /// This will return all the balances for a given owner before moving on to the next owner. In
-    /// the example above this means that the return value should look like:
-    ///
-    /// [Alice Balance of Token ID1, Alice Balance of Token ID2, Bob Balance of Token ID2, Bob Balance of Token ID2]
-    #[ink(message)]
-    fn balance_of_batch(
-        &self,
-        owners: Vec<AccountId>,
-        token_ids: Vec<TokenId>,
-    ) -> Vec<Balance>;
-
-    /// Enable or disable a third party, known as an `operator`, to control all tokens on behalf of
-    /// the caller.
-    #[ink(message)]
-    fn set_approval_for_all(&mut self, operator: AccountId, approved: bool);
-
-    /// Query if the given `operator` is allowed to control all of `owner`'s tokens.
-    #[ink(message)]
-    fn is_approved_for_all(&self, owner: AccountId, operator: AccountId) -> bool;
-}
-
-/// The interface for an ERC-1155 Token Receiver contract.
-///
-/// The interface is defined here: https://eips.ethereum.org/EIPS/eip-1155.
-///
-/// Smart contracts which want to accept token transfers must implement this interface. By default
-/// if a contract does not support this interface any transactions originating from an ERC-1155
-/// compliant contract which attempt to transfer tokens directly to the contract's address must be
-/// reverted.
-#[ink::trait_definition]
-pub trait Erc1155TokenReceiver {
-    /// Handle the receipt of a single ERC-1155 token.
-    ///
-    /// This should be called by a compliant ERC-1155 contract if the intended recipient is a smart
-    /// contract.
-    ///
-    /// If the smart contract implementing this interface accepts token transfers then it must
-    /// return `MAGIC_VALUE` from this function. To reject a transfer it must revert.
-    ///
-    /// Any callers must revert if they receive anything other than `MAGIC_VALUE` as a return
-    /// value.
-    #[ink(message)]
-    fn on_erc_1155_received(
-        &mut self,
-        operator: AccountId,
-        from: AccountId,
-        token_id: TokenId,
-        value: Balance,
-        data: Vec<u8>,
-    ) -> Vec<u8>;
-
-    /// Handle the receipt of multiple ERC-1155 tokens.
-    ///
-    /// This should be called by a compliant ERC-1155 contract if the intended recipient is a smart
-    /// contract.
-    ///
-    /// If the smart contract implementing this interface accepts token transfers then it must
-    /// return `BATCH_MAGIC_VALUE` from this function. To reject a transfer it must revert.
-    ///
-    /// Any callers must revert if they receive anything other than `BATCH_MAGIC_VALUE` as a return
-    /// value.
-    #[ink(message)]
-    fn on_erc_1155_batch_received(
-        &mut self,
-        operator: AccountId,
-        from: AccountId,
-        token_ids: Vec<TokenId>,
-        values: Vec<Balance>,
-        data: Vec<u8>,
-    );
-}
 
 #[ink::contract]
 mod erc1155 {
-    use super::*;
-
     use ink_prelude::collections::BTreeMap;
+    use trait_erc1155::{
+        consts::MAGIC_VALUE_RECEIVED,
+        IErc1155,
+        IErc1155TokenReceiver,
+        TokenId,
+    };
 
     /// Indicate that a token transfer has occured.
     ///
     /// This must be emitted even if a zero value transfer occurs.
+
+    /// @dev Either `TransferSingle` or `TransferBatch` MUST emit when tokens are transferred, including zero value transfers as well as minting or burning (see "Safe Transfer Rules" section of the standard).
+    ///
+    /// The `_operator` argument MUST be the address of an account/contract that is approved to make the transfer (SHOULD be msg.sender).
+    /// The `_from` argument MUST be the address of the holder whose balance is decreased.
+    /// The `_to` argument MUST be the address of the recipient whose balance is increased.
+    /// The `_id` argument MUST be the token type being transferred.
+    /// The `_value` argument MUST be the number of tokens the holder balance is decreased by and match what the recipient balance is increased by.
+    /// When minting/creating tokens, the `_from` argument MUST be set to `0x0` (i.e. zero address).
+    /// When burning/destroying tokens, the `_to` argument MUST be set to `0x0` (i.e. zero address).
     #[ink(event)]
     pub struct TransferSingle {
+        #[ink(topic)]
         operator: AccountId,
+        #[ink(topic)]
         from: AccountId,
+        #[ink(topic)]
         to: AccountId,
-        token_id: TokenId,
+        id: TokenId,
         value: Balance,
     }
 
-    /// Indicate that an approval event has happened.
+    /// @dev Either `TransferSingle` or `TransferBatch` MUST emit when tokens are transferred, including zero value transfers as well as minting or burning (see "Safe Transfer Rules" section of the standard).
+    ///
+    ///  The `_operator` argument MUST be the address of an account/contract that is approved to make the transfer (SHOULD be msg.sender).
+    /// The `_from` argument MUST be the address of the holder whose balance is decreased.
+    /// The `_to` argument MUST be the address of the recipient whose balance is increased.
+    /// The `_ids` argument MUST be the list of tokens being transferred.
+    /// The `_values` argument MUST be the list of number of tokens (matching the list and order of tokens specified in _ids) the holder balance is decreased by and match what the recipient balance is increased by.
+    /// When minting/creating tokens, the `_from` argument MUST be set to `0x0` (i.e. zero address).
+    /// When burning/destroying tokens, the `_to` argument MUST be set to `0x0` (i.e. zero address).
+    #[ink(event)]
+    pub struct TransferBatch {
+        #[ink(topic)]
+        operator: AccountId,
+        #[ink(topic)]
+        from: AccountId,
+        #[ink(topic)]
+        to: AccountId,
+        ids: Vec<TokenId>,
+        values: Vec<Balance>,
+    }
+
+    /// @dev MUST emit when approval for a second party/operator address to manage all tokens for an owner address is enabled or disabled (absence of an event assumes disabled).
     #[ink(event)]
     pub struct ApprovalForAll {
+        #[ink(topic)]
         owner: AccountId,
+        #[ink(topic)]
         operator: AccountId,
         approved: bool,
+    }
+
+    /// Emitted when the URI for token type `id` changes to `value`, if it is a non-programmatic URI.
+    ///
+    /// If an {URI} event was emitted for `id`, the standard
+    /// https://eips.ethereum.org/EIPS/eip-1155#metadata-extensions[guarantees] that `value` will equal the value
+    /// returned by {IERC1155MetadataURI-uri}.
+    #[ink(event)]
+    pub struct URI {
+        value: String,
+        #[ink(topic)]
+        id: TokenId,
     }
 
     /// An ERC-1155 contract.
@@ -325,24 +238,28 @@ mod erc1155 {
                     .params();
 
                 match ink_env::eval_contract(&params) {
-                    Ok(v) => assert_eq!(
-                        v,
-                        &MAGIC_VALUE[..],
-                        "Recipient contract does not accept token transfers."
-                    ),
-                    Err(e) => match e {
-                        ink_env::Error::CodeNotFound => {
-                            // Our recipient wasn't a smart contract, so there's nothing more for
-                            // us to do
+                    Ok(v) => {
+                        assert_eq!(
+                            v,
+                            &MAGIC_VALUE_RECEIVED[..],
+                            "Recipient contract does not accept token transfers."
+                        )
+                    }
+                    Err(e) => {
+                        match e {
+                            ink_env::Error::CodeNotFound => {
+                                // Our recipient wasn't a smart contract, so there's nothing more for
+                                // us to do
+                            }
+                            _ => panic!("{:?}", e),
                         }
-                        _ => panic!("{:?}", e),
-                    },
+                    }
                 }
             }
         }
     }
 
-    impl super::Erc1155 for Contract {
+    impl IErc1155 for Contract {
         #[ink(message)]
         fn safe_transfer_from(
             &mut self,
@@ -451,7 +368,7 @@ mod erc1155 {
         }
     }
 
-    impl super::Erc1155TokenReceiver for Contract {
+    impl IErc1155TokenReceiver for Contract {
         #[ink(message)]
         fn on_erc_1155_received(
             &mut self,
@@ -485,8 +402,13 @@ mod erc1155 {
         use super::*;
         use crate::Erc1155;
 
+        use ink_env::call::{
+            build_call,
+            utils::ReturnType,
+            ExecutionInput,
+            Selector,
+        };
         use ink_lang as ink;
-        use ink_env::call::{build_call, utils::ReturnType, ExecutionInput, Selector};
 
         fn set_sender(sender: AccountId) {
             const WALLET: [u8; 32] = [7; 32];
@@ -495,7 +417,7 @@ mod erc1155 {
                 WALLET.into(),
                 1000000,
                 1000000,
-                ink_env::test::CallData::new(ink_env::call::Selector::new([0x00; 4])), // dummy
+                ink_env::test::CallData::new(ink_env::call::Selector::new([0x00; 4])), /* dummy */
             );
         }
 

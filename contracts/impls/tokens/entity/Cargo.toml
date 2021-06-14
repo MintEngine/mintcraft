@@ -12,12 +12,15 @@ ink_storage = { version = "3.0.0-rc3", git = "https://github.com/paritytech/ink"
 ink_lang = { version = "3.0.0-rc3", git = "https://github.com/paritytech/ink", default-features = false }
 ink_prelude = { version = "3.0.0-rc3", git = "https://github.com/paritytech/ink", default-features = false }
 
+trait_erc1155 = { path = "../../../traits/tokens/erc1155", default-features = false, features = ["ink-as-dependency"] }
+# me_env = { path= "../../../me-env", default-features = false }
+
 scale = { package = "parity-scale-codec", version = "2.1", default-features = false, features = ["derive"] }
 scale-info = { version = "0.6", default-features = false, features = ["derive"], optional = true }
 
 [lib]
 name = "entity"
-path = "src/lib.rs"
+path = "lib.rs"
 crate-type = [
 	# Used for normal contract Wasm blobs.
 	"cdylib",
