@@ -78,12 +78,12 @@ mod erc1155 {
     #[ink(event)]
     pub struct TransferSingle {
         #[ink(topic)]
-        operator: AccountId,
+        operator: Option<AccountId>,
         #[ink(topic)]
-        from: AccountId,
+        from: Option<AccountId>,
         #[ink(topic)]
-        to: AccountId,
-        id: TokenId,
+        to: Option<AccountId>,
+        token_id: TokenId,
         value: Balance,
     }
 
@@ -125,9 +125,9 @@ mod erc1155 {
     /// returned by {IERC1155MetadataURI-uri}.
     #[ink(event)]
     pub struct URI {
-        value: String,
+        value: ink_prelude::string::String,
         #[ink(topic)]
-        id: TokenId,
+        token_id: TokenId,
     }
 
     /// The interface for an ERC-1155 compliant contract.
@@ -295,7 +295,7 @@ mod erc1155 {
             token_ids: Vec<types::TokenId>,
             values: Vec<Balance>,
             data: Vec<u8>,
-        );
+        ) -> Vec<u8>;
     }
 
     // TODO tmp hack struct for passing compile

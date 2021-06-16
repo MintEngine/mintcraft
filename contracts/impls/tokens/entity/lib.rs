@@ -20,7 +20,21 @@ use ink_lang as ink;
 
 #[ink::contract]
 mod erc1155 {
+    #[allow(unused_imports)]
+    use ink_env::call::{
+        build_call,
+        utils::ReturnType,
+        ExecutionInput,
+        Selector,
+    };
+    #[allow(unused_imports)]
     use ink_prelude::collections::BTreeMap;
+    use ink_storage::traits::{
+        PackedLayout,
+        SpreadLayout,
+    };
+
+    #[allow(unused_imports)]
     use trait_erc1155::{
         consts::MAGIC_VALUE_RECEIVED,
         types::{
@@ -47,12 +61,12 @@ mod erc1155 {
     #[ink(event)]
     pub struct TransferSingle {
         #[ink(topic)]
-        operator: AccountId,
+        operator: Option<AccountId>,
         #[ink(topic)]
-        from: AccountId,
+        from: Option<AccountId>,
         #[ink(topic)]
-        to: AccountId,
-        id: TokenId,
+        to: Option<AccountId>,
+        token_id: TokenId,
         value: Balance,
     }
 
@@ -94,37 +108,50 @@ mod erc1155 {
     /// returned by {IERC1155MetadataURI-uri}.
     #[ink(event)]
     pub struct URI {
-        value: String,
+        value: ink_prelude::string::String,
         #[ink(topic)]
-        id: TokenId,
+        token_id: TokenId,
+    }
+
+    /// Represents an (Owner, Operator) pair, in which the operator is allowed to spend funds on
+    /// behalf of the operator.
+    #[derive(
+        Copy,
+        Clone,
+        Debug,
+        Ord,
+        PartialOrd,
+        Eq,
+        PartialEq,
+        PackedLayout,
+        SpreadLayout,
+        scale::Encode,
+        scale::Decode,
+    )]
+    #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
+    struct Approval {
+        owner: AccountId,
+        operator: AccountId,
     }
 
     /// An ERC-1155 contract.
     #[ink(storage)]
+    #[derive(Default)]
     pub struct Contract {
         /// Tracks the balances of accounts across the different tokens that they might be holding.
         balances: BTreeMap<(AccountId, TokenId), Balance>,
-
         /// Which accounts (called operators) have been approved to spend funds on behalf of an owner.
-        ///
-        /// Note that the mapping is Set<(Owner, Operator)>.
-        ///
-        /// TODO: Figure out why I can't use a Set here...
-        approvals: BTreeMap<(AccountId, AccountId), ()>,
-
+        approvals: BTreeMap<Approval, ()>,
         /// A unique identifier for the tokens which have been minted (and are therefore supported)
         /// by this contract.
         token_id_nonce: TokenId,
     }
 
     impl Contract {
+        /// Initialize a default instance of this ERC-1155 implementation.
         #[ink(constructor)]
-        pub fn new(balances: BTreeMap<(AccountId, TokenId), Balance>) -> Self {
-            Self {
-                balances,
-                approvals: Default::default(),
-                token_id_nonce: Default::default(),
-            }
+        pub fn new() -> Self {
+            Default::default()
         }
 
         /// Create the initial supply for a token.
@@ -136,21 +163,18 @@ mod erc1155 {
         /// production environment you'd probably want to lock down the addresses that are allowed
         /// to create tokens.
         #[ink(message)]
-        pub fn create(&mut self, value: Balance, _data: Vec<u8>) -> TokenId {
+        pub fn create(&mut self, value: Balance) -> TokenId {
+            let caller = self.env().caller();
+
             // Given that TokenId is a `u128` the likelihood of this overflowing is pretty slim.
             self.token_id_nonce += 1;
-            self.balances
-                .insert((self.env().caller(), self.token_id_nonce), value);
+            self.balances.insert((caller, self.token_id_nonce), value);
 
             // Emit transfer event but with mint semantics
             self.env().emit_event(TransferSingle {
-                operator: self.env().caller(),
-                from: AccountId::from([0; 32]),
-                to: if value == 0 {
-                    AccountId::from([0; 32])
-                } else {
-                    self.env().caller()
-                },
+                operator: Some(caller),
+                from: None,
+                to: if value == 0 { None } else { Some(caller) },
                 token_id: self.token_id_nonce,
                 value,
             });
@@ -167,20 +191,22 @@ mod erc1155 {
         /// production environment you'd probably want to lock down the addresses that are allowed
         /// to mint tokens.
         #[ink(message)]
-        pub fn mint(&mut self, token_id: TokenId, value: Balance, _data: Vec<u8>) {
+        pub fn mint(&mut self, token_id: TokenId, value: Balance) {
+            let caller = self.env().caller();
+
             assert!(
                 token_id <= self.token_id_nonce,
                 "The `token_id` {:?} has not yet been created in this contract.",
                 token_id
             );
 
-            self.balances.insert((self.env().caller(), token_id), value);
+            self.balances.insert((caller, token_id), value);
 
             // Emit transfer event but with mint semantics
             self.env().emit_event(TransferSingle {
-                operator: self.env().caller(),
-                from: AccountId::from([0; 32]),
-                to: self.env().caller(),
+                operator: Some(caller),
+                from: None,
+                to: Some(caller),
                 token_id,
                 value,
             });
@@ -196,65 +222,90 @@ mod erc1155 {
             to: AccountId,
             token_id: TokenId,
             value: Balance,
-            data: Vec<u8>,
+            #[cfg_attr(test, allow(unused_variables))] data: Vec<u8>,
         ) {
+            let balance = self.balance_of(from, token_id);
             assert!(
-                self.balance_of(from, token_id) >= value,
-                "Insufficent token balance for transfer."
+                balance >= value,
+                "Insufficent token balance for transfer. Expected: {:?}, Got: {:?}",
+                value,
+                balance,
             );
 
-            if let Some(b) = self.balances.get_mut(&(from, token_id)) {
-                *b -= value
-            }
+            self.balances
+                .entry((from, token_id))
+                .and_modify(|b| *b -= value);
 
             self.balances
                 .entry((to, token_id))
                 .and_modify(|b| *b += value)
                 .or_insert(value);
 
+            let caller = self.env().caller();
             self.env().emit_event(TransferSingle {
-                operator: self.env().caller(),
-                from,
-                to,
+                operator: Some(caller),
+                from: Some(from),
+                to: Some(from),
                 token_id,
                 value,
             });
 
-            // Quick Haxx, otherwise my tests just panic due to the use of eval_contract()
+            // This is disabled during tests due to the use of `eval_contract()` not being
+            // supported (tests end up panicking).
+            //
+            // We should be able to get rid of this with when the new off-chain testing
+            // environment is available.
             #[cfg(not(test))]
             {
                 // If our recipient is a smart contract we need to see if they accept or
                 // reject this transfer. If they reject it we need to revert the call.
                 let params = build_call::<ink_env::DefaultEnvironment>()
                     .callee(to)
-                    .gas_limit(5000) // what's the correct amount to use here?
+                    .gas_limit(5000)
                     .exec_input(
-                        // Idk how to get the bytes for the selector
-                        ExecutionInput::new(Selector::new([166, 229, 27, 154]))
-                        .push_arg(self.env().caller())
-                        .push_arg(from)
-                        .push_arg(token_id)
-                        .push_arg(value)
-                        .push_arg(data)
+                        ExecutionInput::new(Selector::new(MAGIC_VALUE_RECEIVED))
+                            .push_arg(caller)
+                            .push_arg(from)
+                            .push_arg(token_id)
+                            .push_arg(value)
+                            .push_arg(data),
                     )
                     .returns::<ReturnType<Vec<u8>>>()
                     .params();
 
                 match ink_env::eval_contract(&params) {
                     Ok(v) => {
+                        ink_env::debug_println!(
+                            "Received return value \"{:?}\" from contract {:?}",
+                            v,
+                            from
+                        );
                         assert_eq!(
                             v,
                             &MAGIC_VALUE_RECEIVED[..],
-                            "Recipient contract does not accept token transfers."
+                            "The recipient contract at {:?} does not accept token transfers.\n
+                            Expected: {:?}, Got {:?}", to, MAGIC_VALUE_RECEIVED, v
                         )
                     }
                     Err(e) => {
                         match e {
-                            ink_env::Error::CodeNotFound => {
+                            ink_env::Error::CodeNotFound
+                            | ink_env::Error::NotCallable => {
                                 // Our recipient wasn't a smart contract, so there's nothing more for
                                 // us to do
+                                ink_env::debug_println!("Recipient at {:?} from is not a smart contract ({:?})", from, e);
                             }
-                            _ => panic!("{:?}", e),
+                            _ => {
+                                // We got some sort of error from the call to our recipient smart
+                                // contract, and as such we must revert this call
+                                let msg = ink_prelude::format!(
+                                    "Got error \"{:?}\" while trying to call {:?}",
+                                    e,
+                                    from
+                                );
+                                ink_env::debug_println!("{}", &msg);
+                                panic!("{}", &msg)
+                            }
                         }
                     }
                 }
@@ -272,16 +323,16 @@ mod erc1155 {
             value: Balance,
             data: Vec<u8>,
         ) -> Result<()> {
-            // Q: Does the caller change if the function is called from within this smart contract?
-            if self.env().caller() != from {
+            let caller = self.env().caller();
+            if caller != from {
                 assert!(
-                    self.is_approved_for_all(from, self.env().caller()),
-                    "Caller is not allowed to transfer on behalf of {:?}.",
+                    self.is_approved_for_all(from, caller),
+                    "Caller ({:?}) is not allowed to transfer on behalf of {:?}.",
+                    caller,
                     from
                 );
             }
 
-            // Q: Would a call be reverted if I return an Error vs. just panicking?
             assert!(
                 to != AccountId::default(),
                 "Cannot send tokens to the zero-address."
@@ -300,9 +351,10 @@ mod erc1155 {
             values: Vec<Balance>,
             data: Vec<u8>,
         ) -> Result<()> {
-            if self.env().caller() != from {
+            let caller = self.env().caller();
+            if caller != from {
                 assert!(
-                    self.is_approved_for_all(from, self.env().caller()),
+                    self.is_approved_for_all(from, caller),
                     "Caller is not allowed to transfer on behalf of {:?}.",
                     from
                 );
@@ -316,8 +368,8 @@ mod erc1155 {
             assert_eq!(
                 token_ids.len(),
                 values.len(),
-                "The number of tokens being transferred does
-                 not match the number of transfer amounts."
+                "The number of tokens being transferred ({:?}) does not match the number of transfer amounts ({:?}).",
+                token_ids.len(), values.len()
             );
 
             token_ids.iter().zip(values.iter()).for_each(|(&id, &v)| {
@@ -354,34 +406,40 @@ mod erc1155 {
             operator: AccountId,
             approved: bool,
         ) -> Result<()> {
+            let caller = self.env().caller();
+
             assert!(
-                operator != self.env().caller(),
+                operator != caller,
                 "An account does not need to approve themselves to transfer tokens."
             );
 
+            let approval = Approval {
+                owner: caller,
+                operator,
+            };
+
             if approved {
-                self.approvals.insert((self.env().caller(), operator), ());
+                self.approvals.insert(approval, ());
             } else {
-                self.approvals.remove(&(self.env().caller(), operator));
+                self.approvals.remove(&approval);
             }
 
             self.env().emit_event(ApprovalForAll {
-                owner: self.env().caller(),
+                owner: approval.owner,
                 operator,
                 approved,
             });
-
             Ok(())
         }
 
         #[ink(message)]
         fn is_approved_for_all(&self, owner: AccountId, operator: AccountId) -> bool {
-            self.approvals.get(&(owner, operator)).is_some()
+            self.approvals.get(&Approval { owner, operator }).is_some()
         }
     }
 
     impl IErc1155TokenReceiver for Contract {
-        #[ink(message)]
+        #[ink(message, selector = "0xF23A6E61")]
         fn on_erc_1155_received(
             &mut self,
             _operator: AccountId,
@@ -393,7 +451,7 @@ mod erc1155 {
             unimplemented!("This smart contract does not accept token transfer.")
         }
 
-        #[ink(message)]
+        #[ink(message, selector = "0xBC197C81")]
         fn on_erc_1155_batch_received(
             &mut self,
             _operator: AccountId,
@@ -401,7 +459,7 @@ mod erc1155 {
             _token_ids: Vec<TokenId>,
             _values: Vec<Balance>,
             _data: Vec<u8>,
-        ) {
+        ) -> Vec<u8> {
             unimplemented!("This smart contract does not accept batch token transfers.")
         }
     }
@@ -414,12 +472,6 @@ mod erc1155 {
         use super::*;
         use crate::Erc1155;
 
-        use ink_env::call::{
-            build_call,
-            utils::ReturnType,
-            ExecutionInput,
-            Selector,
-        };
         use ink_lang as ink;
 
         fn set_sender(sender: AccountId) {
@@ -452,12 +504,12 @@ mod erc1155 {
         }
 
         fn init_contract() -> Contract {
-            let mut balances = BTreeMap::new();
-            balances.insert((alice(), 1), 10);
-            balances.insert((alice(), 2), 20);
-            balances.insert((bob(), 1), 10);
+            let mut erc = Contract::new();
+            erc.balances.insert((alice(), 1), 10);
+            erc.balances.insert((alice(), 2), 20);
+            erc.balances.insert((bob(), 1), 10);
 
-            Contract::new(balances)
+            erc
         }
 
         #[ink::test]
@@ -574,21 +626,21 @@ mod erc1155 {
 
         #[ink::test]
         fn minting_tokens_works() {
-            let mut erc = Contract::new(Default::default());
+            let mut erc = Contract::new();
 
             set_sender(alice());
-            assert_eq!(erc.create(0, vec![]), 1);
+            assert_eq!(erc.create(0), 1);
             assert_eq!(erc.balance_of(alice(), 1), 0);
 
-            erc.mint(1, 123, vec![]);
+            erc.mint(1, 123);
             assert_eq!(erc.balance_of(alice(), 1), 123);
         }
 
         #[ink::test]
         #[should_panic]
         fn minting_not_allowed_for_nonexistent_tokens() {
-            let mut erc = Contract::new(Default::default());
-            erc.mint(7, 123, vec![]);
+            let mut erc = Contract::new();
+            erc.mint(7, 123);
         }
     }
 }
