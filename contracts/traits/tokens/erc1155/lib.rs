@@ -226,11 +226,11 @@ mod erc1155 {
         // to 0xf23a6e61.
         //
         // Note that this is Ethereum specific, I don't know how it translates in Ink! land.
-        pub const MAGIC_VALUE_RECEIVED: [u8; 4] = [242, 58, 110, 97];
+        pub const MAGIC_VALUE_RECEIVED: [u8; 4] = [0xf2, 0x3a, 0x6e, 0x61];
         // It is calculated with
         // `bytes4(keccak256("onERC1155BatchReceived(address,address,uint256[],uint256[],bytes)"))`, and corresponds
         // to 0xbc197c81
-        pub const MAGIC_VALUE_BATCH_RECEIVED: [u8; 4] = [188, 25, 124, 129];
+        pub const MAGIC_VALUE_BATCH_RECEIVED: [u8; 4] = [0xbc, 0x19, 0x7c, 0x81];
     }
 
     /// The interface for an ERC-1155 Token Receiver contract.
