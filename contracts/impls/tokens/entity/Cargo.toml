@@ -12,8 +12,10 @@ ink_storage = { version = "3.0.0-rc3", git = "https://github.com/paritytech/ink"
 ink_lang = { version = "3.0.0-rc3", git = "https://github.com/paritytech/ink", default-features = false }
 ink_prelude = { version = "3.0.0-rc3", git = "https://github.com/paritytech/ink", default-features = false }
 
+metis_lang = { version = "0.1.0", git = "https://github.com/patractlabs/metis", default-features = false }
+metis-ownable = { version = "0.1.0", git = "https://github.com/patractlabs/metis", default-features = false }
+
 trait_erc1155 = { path = "../../../traits/tokens/erc1155", default-features = false, features = ["ink-as-dependency"] }
-# me_env = { path= "../../../me-env", default-features = false }
 
 scale = { package = "parity-scale-codec", version = "2.1", default-features = false, features = ["derive"] }
 scale-info = { version = "0.6", default-features = false, features = ["derive"], optional = true }
@@ -37,6 +39,8 @@ std = [
     "ink_storage/std",
     "ink_lang/std",
     "ink_prelude/std",
+    "metis_lang/std",
+    "metis-ownable/std",
     "scale/std",
     "scale-info/std",
 ]

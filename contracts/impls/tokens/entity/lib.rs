@@ -26,6 +26,13 @@ mod erc1155 {
         PackedLayout,
         SpreadLayout,
     };
+    #[allow(unused_imports)]
+    use metis_lang::{
+        import,
+        metis,
+    };
+    #[allow(unused_imports)]
+    use metis_ownable as ownable;
 
     #[allow(unused_imports)]
     use trait_erc1155::{
@@ -38,10 +45,57 @@ mod erc1155 {
         IErc1155TokenReceiver,
     };
 
+    /// Represents an (Owner, Operator) pair, in which the operator is allowed to spend funds on
+    /// behalf of the operator.
+    #[derive(
+        Copy,
+        Clone,
+        Debug,
+        Ord,
+        PartialOrd,
+        Eq,
+        PartialEq,
+        PackedLayout,
+        SpreadLayout,
+        scale::Encode,
+        scale::Decode,
+    )]
+    #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
+    struct Approval {
+        owner: AccountId,
+        operator: AccountId,
+    }
+
+    /// An ERC-1155 contract.
+    #[ink(storage)]
+    #[import(ownable)]
+    pub struct Contract {
+        /// Ownable data
+        ownable: ownable::Data<Contract>,
+        /// Tracks the balances of accounts across the different tokens that they might be holding.
+        balances: BTreeMap<(AccountId, TokenId), Balance>,
+        /// Which accounts (called operators) have been approved to spend funds on behalf of an owner.
+        approvals: BTreeMap<Approval, ()>,
+        /// A unique identifier for the tokens which have been minted (and are therefore supported)
+        /// by this contract.
+        token_id_nonce: TokenId,
+    }
+
+    /// Event emitted when Owner AccountId Transferred
+    #[ink(event)]
+    #[metis(ownable)]
+    pub struct OwnershipTransferred {
+        /// previous owner account id
+        #[ink(topic)]
+        previous_owner: Option<AccountId>,
+        /// new owner account id
+        #[ink(topic)]
+        new_owner: Option<AccountId>,
+    }
+
     /// Indicate that a token transfer has occured.
     ///
     /// This must be emitted even if a zero value transfer occurs.
-
     /// @dev Either `TransferSingle` or `TransferBatch` MUST emit when tokens are transferred, including zero value transfers as well as minting or burning (see "Safe Transfer Rules" section of the standard).
     ///
     /// The `_operator` argument MUST be the address of an account/contract that is approved to make the transfer (SHOULD be msg.sender).
@@ -106,45 +160,18 @@ mod erc1155 {
         token_id: TokenId,
     }
 
-    /// Represents an (Owner, Operator) pair, in which the operator is allowed to spend funds on
-    /// behalf of the operator.
-    #[derive(
-        Copy,
-        Clone,
-        Debug,
-        Ord,
-        PartialOrd,
-        Eq,
-        PartialEq,
-        PackedLayout,
-        SpreadLayout,
-        scale::Encode,
-        scale::Decode,
-    )]
-    #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
-    struct Approval {
-        owner: AccountId,
-        operator: AccountId,
-    }
-
-    /// An ERC-1155 contract.
-    #[ink(storage)]
-    #[derive(Default)]
-    pub struct Contract {
-        /// Tracks the balances of accounts across the different tokens that they might be holding.
-        balances: BTreeMap<(AccountId, TokenId), Balance>,
-        /// Which accounts (called operators) have been approved to spend funds on behalf of an owner.
-        approvals: BTreeMap<Approval, ()>,
-        /// A unique identifier for the tokens which have been minted (and are therefore supported)
-        /// by this contract.
-        token_id_nonce: TokenId,
-    }
-
     impl Contract {
         /// Initialize a default instance of this ERC-1155 implementation.
         #[ink(constructor)]
         pub fn new() -> Self {
-            Default::default()
+            let mut instance = Self {
+                ownable: ownable::Data::new(),
+                balances: Default::default(),
+                approvals: Default::default(),
+                token_id_nonce: Default::default(),
+            };
+            ownable::Impl::init(&mut instance);
+            instance
         }
 
         /// Create the initial supply for a token.
@@ -205,11 +232,27 @@ mod erc1155 {
             });
         }
 
+        // Ownable messages
+        #[ink(message)]
+        pub fn get_ownership(&self) -> Option<AccountId> {
+            *ownable::Impl::owner(self)
+        }
+
+        #[ink(message)]
+        pub fn renounce_ownership(&mut self) {
+            ownable::Impl::renounce_ownership(self)
+        }
+
+        #[ink(message)]
+        pub fn transfer_ownership(&mut self, new_owner: AccountId) {
+            ownable::Impl::transfer_ownership(self, &new_owner)
+        }
+
         // Helper function for performing single token transfers.
         //
         // Should not be used directly since it's missing certain checks which are important to the
         // ERC-1155 standard (it is expected that the caller has already performed these).
-        fn perform_transfer(
+        fn _perform_transfer(
             &mut self,
             from: AccountId,
             to: AccountId,
@@ -336,7 +379,7 @@ mod erc1155 {
                 "Cannot send tokens to the zero-address."
             );
 
-            self.perform_transfer(from, to, token_id, value, data);
+            self._perform_transfer(from, to, token_id, value, data);
             Ok(())
         }
 
@@ -371,7 +414,7 @@ mod erc1155 {
             );
 
             token_ids.iter().zip(values.iter()).for_each(|(&id, &v)| {
-                self.perform_transfer(from, to, id, v, data.clone());
+                self._perform_transfer(from, to, id, v, data.clone());
             });
 
             Ok(())
