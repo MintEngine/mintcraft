@@ -261,7 +261,7 @@ mod erc1155 {
         /// @@param _data      Additional data with no specified format
         /// @@return           `bytes4(keccak256("onERC1155Received(address,address,uint256,uint256,bytes)"))` (i.e. 0xf23a6e61)
         #[ink(message)]
-        fn on_erc_1155_received(
+        fn on_received(
             &mut self,
             operator: AccountId,
             from: AccountId,
@@ -288,7 +288,7 @@ mod erc1155 {
         /// @param _data      Additional data with no specified format
         /// @return           `bytes4(keccak256("onERC1155BatchReceived(address,address,uint256[],uint256[],bytes)"))` (i.e. 0xbc197c81)
         #[ink(message)]
-        fn on_erc_1155_batch_received(
+        fn on_batch_received(
             &mut self,
             operator: AccountId,
             from: AccountId,

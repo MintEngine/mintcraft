@@ -438,7 +438,7 @@ mod erc1155 {
 
     impl IErc1155TokenReceiver for Contract {
         #[ink(message, selector = "0xF23A6E61")]
-        fn on_erc_1155_received(
+        fn on_received(
             &mut self,
             _operator: AccountId,
             _from: AccountId,
@@ -450,7 +450,7 @@ mod erc1155 {
         }
 
         #[ink(message, selector = "0xBC197C81")]
-        fn on_erc_1155_batch_received(
+        fn on_batch_received(
             &mut self,
             _operator: AccountId,
             _from: AccountId,
