@@ -17,14 +17,20 @@
 #![cfg_attr(test, allow(unused_imports))]
 
 use ink_lang as ink;
+use ink_prelude::string::String;
 
 #[ink::contract]
 mod erc1155 {
+    use super::String;
     #[allow(unused_imports)]
     use ink_prelude::collections::BTreeMap;
-    use ink_storage::traits::{
-        PackedLayout,
-        SpreadLayout,
+    #[allow(unused_imports)]
+    use ink_storage::{
+        collections::HashMap as StorageHashMap,
+        traits::{
+            PackedLayout,
+            SpreadLayout,
+        },
     };
     #[allow(unused_imports)]
     use metis_lang::{
@@ -41,6 +47,7 @@ mod erc1155 {
             Result,
             TokenId,
         },
+        IERC1155Metadata,
         IErc1155,
         IErc1155TokenReceiver,
     };
@@ -72,12 +79,17 @@ mod erc1155 {
     pub struct Contract {
         /// Ownable data
         ownable: ownable::Data<Contract>,
+        /// Name of the token
+        name: Option<String>,
+        /// Symbol of the token
+        symbol: Option<String>,
+        /// The accounts who creates
+        creators: StorageHashMap<TokenId, AccountId>,
         /// Tracks the balances of accounts across the different tokens that they might be holding.
         balances: BTreeMap<(AccountId, TokenId), Balance>,
         /// Which accounts (called operators) have been approved to spend funds on behalf of an owner.
         approvals: BTreeMap<Approval, ()>,
-        /// A unique identifier for the tokens which have been minted (and are therefore supported)
-        /// by this contract.
+        /// A unique identifier for the tokens which have been minted (and are therefore supported) by this contract.
         token_id_nonce: TokenId,
     }
 
@@ -155,7 +167,7 @@ mod erc1155 {
     /// returned by {IERC1155MetadataURI-uri}.
     #[ink(event)]
     pub struct URI {
-        value: ink_prelude::string::String,
+        value: String,
         #[ink(topic)]
         token_id: TokenId,
     }
@@ -163,13 +175,17 @@ mod erc1155 {
     impl Contract {
         /// Initialize a default instance of this ERC-1155 implementation.
         #[ink(constructor)]
-        pub fn new() -> Self {
+        pub fn new(_name: Option<String>, _symbol: Option<String>) -> Self {
             let mut instance = Self {
                 ownable: ownable::Data::new(),
+                name: _name,
+                sybmol: _symbol,
+                creators: StorageHashMap::new(),
                 balances: Default::default(),
                 approvals: Default::default(),
                 token_id_nonce: Default::default(),
             };
+            // init metis ownable module
             ownable::Impl::init(&mut instance);
             instance
         }
@@ -183,12 +199,15 @@ mod erc1155 {
         /// production environment you'd probably want to lock down the addresses that are allowed
         /// to create tokens.
         #[ink(message)]
-        pub fn create(&mut self, value: Balance) -> TokenId {
+        pub fn create(&mut self, _initial_supply: Balance) -> TokenId {
             let caller = self.env().caller();
 
             // Given that TokenId is a `u128` the likelihood of this overflowing is pretty slim.
             self.token_id_nonce += 1;
             self.balances.insert((caller, self.token_id_nonce), value);
+
+            // Set creator
+            self.creators.insert(self.token_id_nonce, caller);
 
             // Emit transfer event but with mint semantics
             self.env().emit_event(TransferSingle {
@@ -214,11 +233,7 @@ mod erc1155 {
         pub fn mint(&mut self, token_id: TokenId, value: Balance) {
             let caller = self.env().caller();
 
-            assert!(
-                token_id <= self.token_id_nonce,
-                "The `token_id` {:?} has not yet been created in this contract.",
-                token_id
-            );
+            self._ensure_token_id_valid(token_id);
 
             self.balances.insert((caller, token_id), value);
 
@@ -230,6 +245,16 @@ mod erc1155 {
                 token_id,
                 value,
             });
+        }
+        // name and sybmol
+        #[ink(message)]
+        pub fn name(&self) -> Option<String> {
+            self.name.clone()
+        }
+
+        #[ink(message)]
+        pub fn symbol(&self) -> Option<String> {
+            self.symbol.clone()
         }
 
         // Ownable messages
@@ -248,6 +273,62 @@ mod erc1155 {
             ownable::Impl::transfer_ownership(self, &new_owner)
         }
 
+        // ------------------------------ Private Methods ------------------------------
+        /// Panic if token_id invalid
+        fn _ensure_token_id_valid(&self, token_id: TokenId) {
+            assert!(
+                token_id <= self.token_id_nonce,
+                "The `token_id` {:?} has not yet been created in this contract.",
+                token_id
+            );
+        }
+
+        /// Panic if `owner` is not a contract owner
+        fn _ensure_contract_owner(&self, owner: &AccountId) {
+            assert!(&self.get_ownership().clone().unwrap() == owner);
+        }
+
+        /// Panic if caller is not a contract owner
+        fn _ensure_caller_is_contract_owner(&self) {
+            self._ensure_contract_owner(&self.env().caller());
+        }
+
+        // Panic if `who` own less than value of the token id
+        fn _ensure_token_owner_amount(
+            &self,
+            who: &AccountId,
+            token_id: TokenId,
+            value: Balance,
+        ) {
+            self._ensure_token_id_valid(token_id);
+
+            let balance = self.balance_of(who.clone(), token_id);
+            assert!(
+                balance >= value,
+                "Insufficent token balance for transfer. Expected: {:?}, Got: {:?}",
+                value,
+                balance,
+            );
+        }
+
+        // Panic if caller own less than 1 of the token id
+        fn _ensure_caller_is_token_owner(&self, token_id: TokenId) {
+            self._ensure_token_owner_amount(&self.env().caller(), token_id, 1)
+        }
+
+        // Panic if `who` is not the creator of the token id
+        fn _ensure_token_creator(&self, who: &AccountId, token_id: TokenId) {
+            self._ensure_token_id_valid(token_id);
+
+            let creator = self.creators.get(token_id);
+            assert!(&creator.clone().unwrap() == who);
+        }
+
+        // Panic if caller is not the creator of the token id
+        fn _ensure_caller_Is_token_create(&self, token_id: TokenId) {
+            self._ensure_token_creator(&self.env().caller(), token_id)
+        }
+
         // Helper function for performing single token transfers.
         //
         // Should not be used directly since it's missing certain checks which are important to the
@@ -260,13 +341,8 @@ mod erc1155 {
             value: Balance,
             #[cfg_attr(test, allow(unused_variables))] data: Vec<u8>,
         ) {
-            let balance = self.balance_of(from, token_id);
-            assert!(
-                balance >= value,
-                "Insufficent token balance for transfer. Expected: {:?}, Got: {:?}",
-                value,
-                balance,
-            );
+            self._ensure_token_id_valid(token_id);
+            self._ensure_token_owner_amount(&from, token_id, value);
 
             self.balances
                 .entry((from, token_id))
@@ -476,6 +552,18 @@ mod erc1155 {
         #[ink(message)]
         fn is_approved_for_all(&self, owner: AccountId, operator: AccountId) -> bool {
             self.approvals.get(&Approval { owner, operator }).is_some()
+        }
+    }
+
+    impl IERC1155Metadata for Contract {
+        /// @notice A distinct Uniform Resource Identifier (URI) for a given token.
+        /// @dev URIs are defined in RFC 3986.
+        /// The URI MUST point to a JSON file that conforms to the "ERC-1155 Metadata URI JSON Schema".
+        #[ink(message)]
+        fn uri(&self, token_id: TokenId) -> Option<String> {
+            self._ensure_token_id_valid(token_id);
+            // TODO Impl it
+            None
         }
     }
 
