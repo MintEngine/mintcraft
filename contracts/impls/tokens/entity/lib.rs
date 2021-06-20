@@ -251,7 +251,7 @@ mod entity {
         pub fn mint(&mut self, token_id: TokenId, value: Balance) {
             let caller = self.env().caller();
 
-            self._ensure_caller_Is_token_creator(token_id);
+            self._ensure_caller_is_token_creator(token_id);
             self._ensure_token_id_valid(token_id);
 
             assert!(value > 0, "Cannot send mint zero amount.");
@@ -349,7 +349,7 @@ mod entity {
         }
 
         // Panic if caller is not the creator of the token id
-        fn _ensure_caller_Is_token_creator(&self, token_id: TokenId) {
+        fn _ensure_caller_is_token_creator(&self, token_id: TokenId) {
             self._ensure_token_creator(&self.env().caller(), token_id)
         }
 
@@ -592,8 +592,8 @@ mod entity {
             } else if token_uri.is_some() {
                 Some(format!(
                     "{0}{1}",
-                    &self.base_uri.unwrap(),
-                    &token_uri.unwrap()
+                    &self.base_uri.clone().unwrap(),
+                    &token_uri.clone().unwrap()
                 ))
             } else {
                 None
