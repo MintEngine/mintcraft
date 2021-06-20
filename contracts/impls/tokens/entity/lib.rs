@@ -52,43 +52,6 @@ mod erc1155 {
         IErc1155TokenReceiver,
     };
 
-    /// Represents an (Owner, Operator) pair, in which the operator is allowed to spend funds on
-    /// behalf of the operator.
-    #[derive(
-        Copy,
-        Clone,
-        Debug,
-        Ord,
-        PartialOrd,
-        Eq,
-        PartialEq,
-        PackedLayout,
-        SpreadLayout,
-        scale::Encode,
-        scale::Decode,
-    )]
-    #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
-    struct Approval {
-        owner: AccountId,
-        operator: AccountId,
-    }
-
-    /// An ERC-1155 contract.
-    #[ink(storage)]
-    #[import(ownable)]
-    pub struct Contract {
-        /// Ownable data
-        ownable: ownable::Data<Contract>,
-        /// The accounts who creates
-        creators: StorageHashMap<TokenId, AccountId>,
-        /// Tracks the balances of accounts across the different tokens that they might be holding.
-        balances: BTreeMap<(AccountId, TokenId), Balance>,
-        /// Which accounts (called operators) have been approved to spend funds on behalf of an owner.
-        approvals: BTreeMap<Approval, ()>,
-        /// A unique identifier for the tokens which have been minted (and are therefore supported) by this contract.
-        token_id_nonce: TokenId,
-    }
-
     /// Event emitted when Owner AccountId Transferred
     #[ink(event)]
     #[metis(ownable)]
@@ -125,26 +88,26 @@ mod erc1155 {
         value: Balance,
     }
 
-    /// @dev Either `TransferSingle` or `TransferBatch` MUST emit when tokens are transferred, including zero value transfers as well as minting or burning (see "Safe Transfer Rules" section of the standard).
-    ///
-    ///  The `_operator` argument MUST be the address of an account/contract that is approved to make the transfer (SHOULD be msg.sender).
-    /// The `_from` argument MUST be the address of the holder whose balance is decreased.
-    /// The `_to` argument MUST be the address of the recipient whose balance is increased.
-    /// The `_ids` argument MUST be the list of tokens being transferred.
-    /// The `_values` argument MUST be the list of number of tokens (matching the list and order of tokens specified in _ids) the holder balance is decreased by and match what the recipient balance is increased by.
-    /// When minting/creating tokens, the `_from` argument MUST be set to `0x0` (i.e. zero address).
-    /// When burning/destroying tokens, the `_to` argument MUST be set to `0x0` (i.e. zero address).
-    #[ink(event)]
-    pub struct TransferBatch {
-        #[ink(topic)]
-        operator: AccountId,
-        #[ink(topic)]
-        from: AccountId,
-        #[ink(topic)]
-        to: AccountId,
-        ids: Vec<TokenId>,
-        values: Vec<Balance>,
-    }
+    // /// @dev Either `TransferSingle` or `TransferBatch` MUST emit when tokens are transferred, including zero value transfers as well as minting or burning (see "Safe Transfer Rules" section of the standard).
+    // ///
+    // ///  The `_operator` argument MUST be the address of an account/contract that is approved to make the transfer (SHOULD be msg.sender).
+    // /// The `_from` argument MUST be the address of the holder whose balance is decreased.
+    // /// The `_to` argument MUST be the address of the recipient whose balance is increased.
+    // /// The `_ids` argument MUST be the list of tokens being transferred.
+    // /// The `_values` argument MUST be the list of number of tokens (matching the list and order of tokens specified in _ids) the holder balance is decreased by and match what the recipient balance is increased by.
+    // /// When minting/creating tokens, the `_from` argument MUST be set to `0x0` (i.e. zero address).
+    // /// When burning/destroying tokens, the `_to` argument MUST be set to `0x0` (i.e. zero address).
+    // #[ink(event)]
+    // pub struct TransferBatch {
+    //     #[ink(topic)]
+    //     operator: AccountId,
+    //     #[ink(topic)]
+    //     from: AccountId,
+    //     #[ink(topic)]
+    //     to: AccountId,
+    //     ids: Vec<TokenId>,
+    //     values: Vec<Balance>,
+    // }
 
     /// @dev MUST emit when approval for a second party/operator address to manage all tokens for an owner address is enabled or disabled (absence of an event assumes disabled).
     #[ink(event)]
@@ -156,28 +119,71 @@ mod erc1155 {
         approved: bool,
     }
 
-    /// Emitted when the URI for token type `id` changes to `value`, if it is a non-programmatic URI.
-    ///
-    /// If an {URI} event was emitted for `id`, the standard
-    /// https://eips.ethereum.org/EIPS/eip-1155#metadata-extensions[guarantees] that `value` will equal the value
-    /// returned by {IERC1155MetadataURI-uri}.
-    #[ink(event)]
-    pub struct URI {
-        value: String,
-        #[ink(topic)]
-        token_id: TokenId,
+    // /// Emitted when the URI for token type `id` changes to `value`, if it is a non-programmatic URI.
+    // ///
+    // /// If an {URI} event was emitted for `id`, the standard
+    // /// https://eips.ethereum.org/EIPS/eip-1155#metadata-extensions[guarantees] that `value` will equal the value
+    // /// returned by {IERC1155MetadataURI-uri}.
+    // #[ink(event)]
+    // pub struct URI {
+    //     value: String,
+    //     #[ink(topic)]
+    //     token_id: TokenId,
+    // }
+
+    /// Represents an (Owner, Operator) pair, in which the operator is allowed to spend funds on
+    /// behalf of the operator.
+    #[derive(
+        Copy,
+        Clone,
+        Debug,
+        Ord,
+        PartialOrd,
+        Eq,
+        PartialEq,
+        PackedLayout,
+        SpreadLayout,
+        scale::Encode,
+        scale::Decode,
+    )]
+    #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
+    struct Approval {
+        owner: AccountId,
+        operator: AccountId,
+    }
+
+    /// An ERC-1155 contract.
+    #[ink(storage)]
+    #[import(ownable)]
+    pub struct Contract {
+        /// Tracks the balances of accounts across the different tokens that they might be holding.
+        balances: BTreeMap<(AccountId, TokenId), Balance>,
+        /// Which accounts (called operators) have been approved to spend funds on behalf of an owner.
+        approvals: BTreeMap<Approval, ()>,
+        /// A unique identifier for the tokens which have been minted (and are therefore supported) by this contract.
+        token_id_nonce: TokenId,
+        /// Ownable data
+        ownable: ownable::Data<Contract>,
+        /// The accounts who creates
+        creators: StorageHashMap<TokenId, AccountId>,
+        /// token metadata uri
+        token_uris: StorageHashMap<TokenId, Option<String>>,
+        /// token metadata baseuri
+        base_uri: Option<String>,
     }
 
     impl Contract {
         /// Initialize a default instance of this ERC-1155 implementation.
         #[ink(constructor)]
-        pub fn new() -> Self {
+        pub fn new(_base_uri: Option<String>) -> Self {
             let mut instance = Self {
-                ownable: ownable::Data::new(),
-                creators: StorageHashMap::new(),
                 balances: Default::default(),
                 approvals: Default::default(),
                 token_id_nonce: Default::default(),
+                ownable: ownable::Data::new(),
+                creators: StorageHashMap::new(),
+                token_uris: StorageHashMap::new(),
+                base_uri: _base_uri,
             };
             // init metis ownable module
             ownable::Impl::init(&mut instance);
@@ -193,7 +199,11 @@ mod erc1155 {
         /// production environment you'd probably want to lock down the addresses that are allowed
         /// to create tokens.
         #[ink(message)]
-        pub fn create(&mut self, _initial_supply: Balance) -> TokenId {
+        pub fn create(
+            &mut self,
+            _initial_supply: Balance,
+            _metadata_uri: Option<String>,
+        ) -> TokenId {
             let caller = self.env().caller();
 
             // Given that TokenId is a `u128` the likelihood of this overflowing is pretty slim.
@@ -205,6 +215,9 @@ mod erc1155 {
             }
             // Set creator
             self.creators.insert(self.token_id_nonce, caller);
+
+            // Set metadata
+            self.token_uris.insert(self.token_id_nonce, _metadata_uri);
 
             // Emit transfer event but with mint semantics
             self.env().emit_event(TransferSingle {
@@ -267,7 +280,20 @@ mod erc1155 {
             ownable::Impl::transfer_ownership(self, &new_owner)
         }
 
+        #[ink(message)]
+        pub fn set_base_uri(&mut self, new_base_uri: Option<String>) {
+            self._ensure_caller_is_contract_owner();
+            self.base_uri = new_base_uri;
+        }
+
         // ------------------------------ Private Methods ------------------------------
+
+        /// get token uri
+        fn _get_token_uri(&self, token_id: TokenId) -> Option<String> {
+            self._ensure_token_id_valid(token_id);
+            self.token_uris.get(token_id).unwrap_or(None)
+        }
+
         /// Panic if token_id invalid
         fn _ensure_token_id_valid(&self, token_id: TokenId) {
             assert!(
@@ -555,9 +581,16 @@ mod erc1155 {
         /// The URI MUST point to a JSON file that conforms to the "ERC-1155 Metadata URI JSON Schema".
         #[ink(message)]
         fn uri(&self, token_id: TokenId) -> Option<String> {
-            self._ensure_token_id_valid(token_id);
-            // TODO Impl it
-            None
+            let token_uri = self._get_token_uri(token_id);
+            let base_uri = self.base_uri;
+            // return uri
+            if base_uri.is_none() {
+                token_uri
+            } else if token_uri.is_some() {
+                Some(format!("{0}{1}", base_uri.unwrap(), token_uri.unwrap()))
+            } else {
+                None
+            }
         }
     }
 
@@ -756,7 +789,7 @@ mod erc1155 {
             let mut erc = Contract::new();
 
             set_sender(alice());
-            assert_eq!(erc.create(0), 1);
+            assert_eq!(erc.create(0, None), 1);
             assert_eq!(erc.balance_of(alice(), 1), 0);
 
             erc.mint(1, 123);
