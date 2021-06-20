@@ -16,17 +16,21 @@
 #![cfg_attr(test, allow(dead_code))]
 #![cfg_attr(test, allow(unused_imports))]
 
-use ink_lang as ink;
-use ink_prelude::string::String;
-
-#[ink::contract]
-mod erc1155 {
-    use super::String;
+#[metis_lang::contract]
+mod entity {
     #[allow(unused_imports)]
-    use ink_prelude::collections::BTreeMap;
+    use ink_prelude::{
+        collections::BTreeMap,
+        format,
+        string::String,
+        vec::Vec,
+    };
     #[allow(unused_imports)]
     use ink_storage::{
-        collections::HashMap as StorageHashMap,
+        collections::{
+            HashMap as StorageHashMap,
+            Vec as StorageVec,
+        },
         traits::{
             PackedLayout,
             SpreadLayout,
@@ -229,7 +233,7 @@ mod erc1155 {
                     Some(caller)
                 },
                 token_id: self.token_id_nonce,
-                value,
+                value: _initial_supply,
             });
 
             self.token_id_nonce
@@ -291,7 +295,7 @@ mod erc1155 {
         /// get token uri
         fn _get_token_uri(&self, token_id: TokenId) -> Option<String> {
             self._ensure_token_id_valid(token_id);
-            self.token_uris.get(token_id).unwrap_or(None)
+            self.token_uris.get(&token_id).unwrap_or(&None).clone()
         }
 
         /// Panic if token_id invalid
@@ -340,8 +344,8 @@ mod erc1155 {
         fn _ensure_token_creator(&self, who: &AccountId, token_id: TokenId) {
             self._ensure_token_id_valid(token_id);
 
-            let creator = self.creators.get(token_id);
-            assert!(&creator.clone().unwrap() == who);
+            let creator = self.creators.get(&token_id);
+            assert!(creator.clone().unwrap() == who);
         }
 
         // Panic if caller is not the creator of the token id
@@ -582,12 +586,15 @@ mod erc1155 {
         #[ink(message)]
         fn uri(&self, token_id: TokenId) -> Option<String> {
             let token_uri = self._get_token_uri(token_id);
-            let base_uri = self.base_uri;
             // return uri
-            if base_uri.is_none() {
+            if self.base_uri.is_none() {
                 token_uri
             } else if token_uri.is_some() {
-                Some(format!("{0}{1}", base_uri.unwrap(), token_uri.unwrap()))
+                Some(format!(
+                    "{0}{1}",
+                    &self.base_uri.unwrap(),
+                    &token_uri.unwrap()
+                ))
             } else {
                 None
             }
