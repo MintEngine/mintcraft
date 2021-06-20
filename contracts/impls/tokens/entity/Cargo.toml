@@ -43,6 +43,7 @@ std = [
     "metis-ownable/std",
     "scale/std",
     "scale-info/std",
+    "trait_erc1155/std",
 ]
 ink-as-dependency = []
 ink-experimental-engine = ["ink_env/ink-experimental-engine"]
