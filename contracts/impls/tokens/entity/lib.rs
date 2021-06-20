@@ -198,8 +198,11 @@ mod erc1155 {
 
             // Given that TokenId is a `u128` the likelihood of this overflowing is pretty slim.
             self.token_id_nonce += 1;
-            self.balances.insert((caller, self.token_id_nonce), value);
-
+            // Add balance
+            if _initial_supply > 0 {
+                self.balances
+                    .insert((caller, self.token_id_nonce), _initial_supply);
+            }
             // Set creator
             self.creators.insert(self.token_id_nonce, caller);
 
@@ -207,7 +210,11 @@ mod erc1155 {
             self.env().emit_event(TransferSingle {
                 operator: Some(caller),
                 from: None,
-                to: if value == 0 { None } else { Some(caller) },
+                to: if _initial_supply == 0 {
+                    None
+                } else {
+                    Some(caller)
+                },
                 token_id: self.token_id_nonce,
                 value,
             });
@@ -227,7 +234,10 @@ mod erc1155 {
         pub fn mint(&mut self, token_id: TokenId, value: Balance) {
             let caller = self.env().caller();
 
+            self._ensure_caller_Is_token_creator(token_id);
             self._ensure_token_id_valid(token_id);
+
+            assert!(value > 0, "Cannot send mint zero amount.");
 
             self.balances.insert((caller, token_id), value);
 
@@ -309,7 +319,7 @@ mod erc1155 {
         }
 
         // Panic if caller is not the creator of the token id
-        fn _ensure_caller_Is_token_create(&self, token_id: TokenId) {
+        fn _ensure_caller_Is_token_creator(&self, token_id: TokenId) {
             self._ensure_token_creator(&self.env().caller(), token_id)
         }
 
