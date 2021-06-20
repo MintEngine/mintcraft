@@ -79,10 +79,6 @@ mod erc1155 {
     pub struct Contract {
         /// Ownable data
         ownable: ownable::Data<Contract>,
-        /// Name of the token
-        name: Option<String>,
-        /// Symbol of the token
-        symbol: Option<String>,
         /// The accounts who creates
         creators: StorageHashMap<TokenId, AccountId>,
         /// Tracks the balances of accounts across the different tokens that they might be holding.
@@ -175,11 +171,9 @@ mod erc1155 {
     impl Contract {
         /// Initialize a default instance of this ERC-1155 implementation.
         #[ink(constructor)]
-        pub fn new(_name: Option<String>, _symbol: Option<String>) -> Self {
+        pub fn new() -> Self {
             let mut instance = Self {
                 ownable: ownable::Data::new(),
-                name: _name,
-                sybmol: _symbol,
                 creators: StorageHashMap::new(),
                 balances: Default::default(),
                 approvals: Default::default(),
@@ -245,16 +239,6 @@ mod erc1155 {
                 token_id,
                 value,
             });
-        }
-        // name and sybmol
-        #[ink(message)]
-        pub fn name(&self) -> Option<String> {
-            self.name.clone()
-        }
-
-        #[ink(message)]
-        pub fn symbol(&self) -> Option<String> {
-            self.symbol.clone()
         }
 
         // Ownable messages
