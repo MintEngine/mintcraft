@@ -796,5 +796,22 @@ mod entity {
             let res = erc.mint(1, 123);
             assert_eq!(res.unwrap_err(), Error::UnexistentToken);
         }
+
+        #[ink::test]
+        fn init_baseurl_works() {
+            let mut erc = Contract::new(Some(String::from("test")));
+            let baseUrl = erc.base_uri.unwrap();
+            assert_eq!(baseUrl, String::from("test"));
+        }
+
+        #[ink::test]
+        fn set_baseurl_works() {
+            let mut erc = Contract::new(Option::default());
+            erc.set_base_uri(Some(String::from("test2")));
+            let baseUrl = erc.base_uri.unwrap();
+            assert_eq!(baseUrl, String::from("test2"));
+        }
+
+
     }
 }
