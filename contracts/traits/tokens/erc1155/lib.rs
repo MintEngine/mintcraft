@@ -18,11 +18,7 @@
 
 // Export to pub
 pub use self::erc1155::{
-    consts,
-    types,
-    IERC1155Metadata,
-    IErc1155,
-    IErc1155TokenReceiver,
+    consts, types, IERC1155Metadata, IErc1155, IErc1155TokenReceiver,
 };
 // FIXME Cursor errors when export Event
 
@@ -30,18 +26,13 @@ use ink_lang as ink;
 
 #[ink::contract]
 mod erc1155 {
+    use crate::types::TokenId;
     use ink_lang as ink;
-    use ink_prelude::{
-        string::String,
-        vec::Vec,
-    };
+    use ink_prelude::{string::String, vec::Vec};
 
     /// export all types
     pub mod types {
-        use scale::{
-            Decode,
-            Encode,
-        };
+        use scale::{Decode, Encode};
 
         /// The result type.
         pub type Result<T> = core::result::Result<T, Error>;

@@ -25,6 +25,7 @@ macro_rules! ensure {
     }};
 }
 
+pub use self::entity::Contract;
 #[metis_lang::contract]
 mod entity {
     #[allow(unused_imports)]
@@ -593,7 +594,7 @@ mod entity {
     mod tests {
         /// Imports all the definitions from the outer scope so we can use them here.
         use super::*;
-        use crate::Erc1155;
+        use crate::entity::Contract;
 
         use ink_lang as ink;
 
@@ -638,7 +639,7 @@ mod entity {
         }
 
         fn init_contract() -> Contract {
-            let mut erc = Contract::new();
+            let mut erc = Contract::new(Option::default());
             erc.balances.insert((alice(), 1), 10);
             erc.balances.insert((alice(), 2), 20);
             erc.balances.insert((bob(), 1), 10);
@@ -778,10 +779,10 @@ mod entity {
 
         #[ink::test]
         fn minting_tokens_works() {
-            let mut erc = Contract::new();
+            let mut erc = Contract::new(Option::default());
 
             set_sender(alice());
-            assert_eq!(erc.create(0), 1);
+            assert_eq!(erc.create(0, Option::default()), 1);
             assert_eq!(erc.balance_of(alice(), 1), 0);
 
             assert!(erc.mint(1, 123).is_ok());
@@ -790,7 +791,7 @@ mod entity {
 
         #[ink::test]
         fn minting_not_allowed_for_nonexistent_tokens() {
-            let mut erc = Contract::new();
+            let mut erc = Contract::new(Option::default());
 
             let res = erc.mint(1, 123);
             assert_eq!(res.unwrap_err(), Error::UnexistentToken);
