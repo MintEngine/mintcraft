@@ -1,3 +1,3 @@
-# Mintcraft
+# Mintcraft - Ink! Demo
 
-ink! project for mintcraft
+ink! demo project for mintcraft
